@@ -80,32 +80,34 @@ app.get("/reminder", (req, res) => {
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const currentTime = now.toTimeString().slice(0, 5);
 
-  let shouldTrigger = false;
+  if (!medicineReminder) {
+    return res.json({
+      serverTime: currentTime,
+      medicineName: "",
+      trigger: false
+    });
+  }
 
-  if (medicineReminder) {
+  for (let t of medicineReminder.times) {
 
-    for (let t of medicineReminder.times) {
+    const [h, m] = t.split(":").map(Number);
+    const reminderMinutes = h * 60 + m;
 
-      const [h, m] = t.split(":").map(Number);
-      const reminderMinutes = h * 60 + m;
+    if (currentMinutes >= reminderMinutes &&
+        medicineReminder.acknowledged === false) {
 
-      // Trigger if current time >= reminder time
-      if (
-        currentMinutes >= reminderMinutes &&
-        medicineReminder.lastTriggered !== t &&
-        medicineReminder.acknowledged === false
-      ) {
-        shouldTrigger = true;
-        medicineReminder.lastTriggered = t;
-        break;
-      }
+      return res.json({
+        serverTime: currentTime,
+        medicineName: medicineReminder.medicineName,
+        trigger: true
+      });
     }
   }
 
   res.json({
     serverTime: currentTime,
-    medicineName: medicineReminder?.medicineName || "",
-    trigger: shouldTrigger
+    medicineName: medicineReminder.medicineName,
+    trigger: false
   });
 });
 
