@@ -8,16 +8,21 @@ app.use(cors());
 app.use(express.json());
 
 let latestAlert = null;
+let medicineReminder = null;
 
-// ESP32 → POSTs continuously
+/* =====================================================
+   1️⃣ ESP32 HEALTH DATA
+===================================================== */
+
+// ESP32 → POST continuously
 app.post("/alert", (req, res) => {
-  const { temperature, heartRate, risk } = req.body;
+  const { temperature, heartRate, risk, fall } = req.body;
 
-  // Basic validation (non-breaking)
   if (
     temperature === undefined ||
     heartRate === undefined ||
-    risk === undefined
+    risk === undefined ||
+    fall === undefined
   ) {
     return res.status(400).json({ error: "Invalid payload" });
   }
@@ -25,17 +30,78 @@ app.post("/alert", (req, res) => {
   latestAlert = {
     temperature,
     heartRate,
-    risk, // "HIGH" or "NORMAL"
+    risk,
+    fall,
     time: new Date().toISOString(),
   };
 
-  console.log("ESP32 DATA:", latestAlert);
+  console.log("========== ESP32 DATA ==========");
+  console.log(latestAlert);
+
+  if (fall === true) {
+    console.log("🚨 FALL DETECTED ALERT 🚨");
+  }
+
   res.json({ success: true });
 });
 
 // Frontend → GET latest status
 app.get("/alert", (req, res) => {
   res.json(latestAlert ?? {});
+});
+
+/* =====================================================
+   2️⃣ MEDICINE REMINDER SYSTEM
+===================================================== */
+
+// Guardian sets medicine
+app.post("/set-medicine", (req, res) => {
+  const { medicineName, times } = req.body;
+
+  /*
+    times should be array like:
+    ["09:00", "14:00", "21:00"]
+  */
+
+  if (!medicineName || !Array.isArray(times)) {
+    return res.status(400).json({ error: "Invalid medicine data" });
+  }
+
+  medicineReminder = {
+    medicineName,
+    times,
+    lastTriggered: null
+  };
+
+  console.log("💊 Medicine Reminder Set:");
+  console.log(medicineReminder);
+
+  res.json({ success: true });
+});
+
+// ESP32 fetches reminder
+app.get("/reminder", (req, res) => {
+  if (!medicineReminder) {
+    return res.json({});
+  }
+
+  const now = new Date();
+  const currentTime = now.toTimeString().slice(0, 5); // "HH:MM"
+
+  let shouldTrigger = false;
+
+  if (
+    medicineReminder.times.includes(currentTime) &&
+    medicineReminder.lastTriggered !== currentTime
+  ) {
+    shouldTrigger = true;
+    medicineReminder.lastTriggered = currentTime;
+  }
+
+  res.json({
+    medicineName: medicineReminder.medicineName,
+    trigger: shouldTrigger
+  });
 });
 
 app.listen(PORT, () => {
