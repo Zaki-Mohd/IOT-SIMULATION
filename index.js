@@ -80,13 +80,19 @@ app.post("/set-medicine", (req, res) => {
 });
 
 // ESP32 fetches reminder
+// ESP32 fetches reminder
 app.get("/reminder", (req, res) => {
-  if (!medicineReminder) {
-    return res.json({});
-  }
 
   const now = new Date();
   const currentTime = now.toTimeString().slice(0, 5); // "HH:MM"
+
+  if (!medicineReminder) {
+    return res.json({
+      serverTime: currentTime,
+      medicineName: "",
+      trigger: false
+    });
+  }
 
   let shouldTrigger = false;
 
@@ -99,6 +105,7 @@ app.get("/reminder", (req, res) => {
   }
 
   res.json({
+    serverTime: currentTime,   // 👈 important addition
     medicineName: medicineReminder.medicineName,
     trigger: shouldTrigger
   });
