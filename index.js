@@ -14,7 +14,6 @@ let medicineReminder = null;
    1️⃣ ESP32 HEALTH DATA
 ===================================================== */
 
-// ESP32 → POST continuously
 app.post("/alert", (req, res) => {
   const { temperature, heartRate, risk, fall } = req.body;
 
@@ -45,7 +44,6 @@ app.post("/alert", (req, res) => {
   res.json({ success: true });
 });
 
-// Frontend → GET latest status
 app.get("/alert", (req, res) => {
   res.json(latestAlert ?? {});
 });
@@ -58,11 +56,6 @@ app.get("/alert", (req, res) => {
 app.post("/set-medicine", (req, res) => {
   const { medicineName, times } = req.body;
 
-  /*
-    times should be array like:
-    ["09:00", "14:00", "21:00"]
-  */
-
   if (!medicineName || !Array.isArray(times)) {
     return res.status(400).json({ error: "Invalid medicine data" });
   }
@@ -70,7 +63,8 @@ app.post("/set-medicine", (req, res) => {
   medicineReminder = {
     medicineName,
     times,
-    lastTriggered: null
+    lastTriggered: null,
+    acknowledged: false
   };
 
   console.log("💊 Medicine Reminder Set:");
@@ -80,35 +74,56 @@ app.post("/set-medicine", (req, res) => {
 });
 
 // ESP32 fetches reminder
-// ESP32 fetches reminder
 app.get("/reminder", (req, res) => {
 
   const now = new Date();
-  const currentTime = now.toTimeString().slice(0, 5); // "HH:MM"
-
-  if (!medicineReminder) {
-    return res.json({
-      serverTime: currentTime,
-      medicineName: "",
-      trigger: false
-    });
-  }
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentTime = now.toTimeString().slice(0, 5);
 
   let shouldTrigger = false;
 
-  if (
-    medicineReminder.times.includes(currentTime) &&
-    medicineReminder.lastTriggered !== currentTime
-  ) {
-    shouldTrigger = true;
-    medicineReminder.lastTriggered = currentTime;
+  if (medicineReminder) {
+
+    for (let t of medicineReminder.times) {
+
+      const [h, m] = t.split(":").map(Number);
+      const reminderMinutes = h * 60 + m;
+
+      // Trigger if current time >= reminder time
+      if (
+        currentMinutes >= reminderMinutes &&
+        medicineReminder.lastTriggered !== t &&
+        medicineReminder.acknowledged === false
+      ) {
+        shouldTrigger = true;
+        medicineReminder.lastTriggered = t;
+        break;
+      }
+    }
   }
 
   res.json({
-    serverTime: currentTime,   // 👈 important addition
-    medicineName: medicineReminder.medicineName,
+    serverTime: currentTime,
+    medicineName: medicineReminder?.medicineName || "",
     trigger: shouldTrigger
   });
+});
+
+/* =====================================================
+   3️⃣ ACKNOWLEDGE FROM WATCH
+===================================================== */
+
+app.post("/acknowledge", (req, res) => {
+
+  if (!medicineReminder) {
+    return res.status(400).json({ error: "No reminder set" });
+  }
+
+  medicineReminder.acknowledged = true;
+
+  console.log("✅ Medicine Acknowledged by Watch");
+
+  res.json({ success: true });
 });
 
 app.listen(PORT, () => {
