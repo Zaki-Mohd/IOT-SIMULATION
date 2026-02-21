@@ -1,8 +1,18 @@
 import express from "express";
 import cors from "cors";
+import mongoose from "mongoose";
+import Reminder from "./models/Reminder.js";
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+
+mongoose.connect(process.env.MONGO_URI);
+mongoose.connection.on("connected", () => {
+  console.log("MongoDB Connected");
+});
+
 
 app.use(cors());
 app.use(express.json());
@@ -53,34 +63,46 @@ app.get("/alert", (req, res) => {
 ===================================================== */
 
 // Guardian sets medicine
-app.post("/set-medicine", (req, res) => {
+app.post("/set-medicine", async (req, res) => {
   const { medicineName, times } = req.body;
 
   if (!medicineName || !Array.isArray(times)) {
     return res.status(400).json({ error: "Invalid medicine data" });
   }
 
-  medicineReminder = {
-    medicineName,
-    times,
-    lastTriggered: null,
-    acknowledged: false
-  };
+  let reminder = await Reminder.findOne();
 
-  console.log("💊 Medicine Reminder Set:");
-  console.log(medicineReminder);
+  if (!reminder) {
+    reminder = new Reminder({ medicineName, times });
+  } else {
+    reminder.medicineName = medicineName;
+    reminder.times = times;
+    reminder.acknowledged = false;
+  }
+
+  await reminder.save();
 
   res.json({ success: true });
 });
 
 // ESP32 fetches reminder
-app.get("/reminder", (req, res) => {
+app.get("/reminder", async (req, res) => {
 
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const currentTime = now.toTimeString().slice(0, 5);
+  const now = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata"
+  });
 
-  if (!medicineReminder) {
+  const indianTime = new Date(now);
+
+  const currentTime = indianTime.toLocaleString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+
+  const reminder = await Reminder.findOne();
+
+  if (!reminder) {
     return res.json({
       serverTime: currentTime,
       medicineName: "",
@@ -88,25 +110,24 @@ app.get("/reminder", (req, res) => {
     });
   }
 
-  for (let t of medicineReminder.times) {
+  if (
+    reminder.times.includes(currentTime) &&
+    reminder.acknowledged === false &&
+    reminder.lastTriggered !== currentTime
+  ) {
+    reminder.lastTriggered = currentTime;
+    await reminder.save();
 
-    const [h, m] = t.split(":").map(Number);
-    const reminderMinutes = h * 60 + m;
-
-    if (currentMinutes >= reminderMinutes &&
-        medicineReminder.acknowledged === false) {
-
-      return res.json({
-        serverTime: currentTime,
-        medicineName: medicineReminder.medicineName,
-        trigger: true
-      });
-    }
+    return res.json({
+      serverTime: currentTime,
+      medicineName: reminder.medicineName,
+      trigger: true
+    });
   }
 
   res.json({
     serverTime: currentTime,
-    medicineName: medicineReminder.medicineName,
+    medicineName: reminder.medicineName,
     trigger: false
   });
 });
@@ -115,19 +136,20 @@ app.get("/reminder", (req, res) => {
    3️⃣ ACKNOWLEDGE FROM WATCH
 ===================================================== */
 
-app.post("/acknowledge", (req, res) => {
+app.post("/acknowledge", async (req, res) => {
 
-  if (!medicineReminder) {
+  const reminder = await Reminder.findOne();
+  if (!reminder) {
     return res.status(400).json({ error: "No reminder set" });
   }
 
-  medicineReminder.acknowledged = true;
+  reminder.acknowledged = true;
+  await reminder.save();
 
   console.log("✅ Medicine Acknowledged by Watch");
 
   res.json({ success: true });
 });
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
