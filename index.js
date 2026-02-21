@@ -89,11 +89,8 @@ app.post("/set-medicine", async (req, res) => {
 // ESP32 fetches reminder
 app.get("/reminder", async (req, res) => {
 
-  const indianTime = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-  );
-
-  const currentTime = indianTime.toLocaleString("en-IN", {
+  const currentTime = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     hour: "2-digit",
     minute: "2-digit",
     hour12: true
@@ -111,12 +108,8 @@ app.get("/reminder", async (req, res) => {
 
   if (
     reminder.times.includes(currentTime) &&
-    reminder.acknowledged === false &&
-    reminder.lastTriggered !== currentTime
+    reminder.acknowledged === false
   ) {
-    reminder.lastTriggered = currentTime;
-    await reminder.save();
-
     return res.json({
       serverTime: currentTime,
       medicineName: reminder.medicineName,
