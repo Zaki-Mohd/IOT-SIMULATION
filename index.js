@@ -86,13 +86,12 @@ app.post("/set-medicine", async (req, res) => {
 });
 
 // ESP32 fetches reminder
+// ESP32 fetches reminder
 app.get("/reminder", async (req, res) => {
 
-  const now = new Date().toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata"
-  });
-
-  const indianTime = new Date(now);
+  const indianTime = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+  );
 
   const currentTime = indianTime.toLocaleString("en-IN", {
     hour: "2-digit",
@@ -131,7 +130,6 @@ app.get("/reminder", async (req, res) => {
     trigger: false
   });
 });
-
 /* =====================================================
    3️⃣ ACKNOWLEDGE FROM WATCH
 ===================================================== */
